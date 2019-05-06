@@ -158,8 +158,10 @@ func (ss *SlaitSubscriber) handleMessage(msg []byte, msgType int) (err error) {
 func (ss *SlaitSubscriber) publicationToCSM(p cache.Publication) (io.ColumnSeriesMap, error) {
 	columns := make([]interface{}, len(ss.shape))
 	names := make([]string, len(ss.shape))
+	keys := make(map[string]int, len(ss.shape))
 	length := p.Entries.Len()
 	for i, shape := range ss.shape {
+		keys[shape.Name] = i
 		names[i] = shape.Name
 		switch shape.Type {
 		case io.INT32:
@@ -170,6 +172,8 @@ func (ss *SlaitSubscriber) publicationToCSM(p cache.Publication) (io.ColumnSerie
 			columns[i] = make([]float32, length)
 		case io.FLOAT64:
 			columns[i] = make([]float64, length)
+		case io.EPOCH:
+			columns[i] = make([]int64, length)
 		default:
 			panic(fmt.Sprintf("unsupported shape: %v", shape.Type))
 		}
@@ -181,22 +185,24 @@ func (ss *SlaitSubscriber) publicationToCSM(p cache.Publication) (io.ColumnSerie
 		}
 		for name, data := range row {
 			var v reflect.Value
-			if str, ok := data.(string); ok {
-				name = "Epoch"
-				t, err := time.Parse(time.RFC3339, str)
-				if err != nil {
-					return nil, err
+			if j, ok := keys[name]; ok {
+				if ss.shape[j].Type == io.EPOCH {
+					if str, ok := data.(string); ok {
+						t, err := time.Parse(time.RFC3339, str)
+						if err != nil {
+							return nil, err
+						}
+						v = reflect.ValueOf(t.Unix())
+					} else {
+						v = reflect.ValueOf(data)
+					}
+				} else {
+					v = reflect.ValueOf(data)
 				}
-				v = reflect.ValueOf(t.Unix())
-			} else {
-				v = reflect.ValueOf(data)
-			}
-			for j, colName := range names {
-				if name == colName {
-					value := reflect.ValueOf(columns[j])
-					e := value.Index(i)
-					e.Set(reflect.ValueOf(v.Convert(reflect.TypeOf(e.Interface())).Interface()))
-				}
+
+				value := reflect.ValueOf(columns[j])
+				e := value.Index(i)
+				e.Set(reflect.ValueOf(v.Convert(reflect.TypeOf(e.Interface())).Interface()))
 			}
 		}
 	}
