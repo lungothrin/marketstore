@@ -20,6 +20,7 @@ import (
 type SlaitSubscriberConfig struct {
 	Endpoint       string     `json:"endpoint"`
 	Topic          string     `json:"topic"`
+	Timeframe      string	  `json:"timeframe"`
 	AttributeGroup string     `json:"attribute_group"`
 	Shape          [][]string `json:"shape"`
 }
@@ -28,6 +29,7 @@ type SlaitSubscriber struct {
 	config         map[string]interface{}
 	endpoint       string
 	topic          string
+	timeframe      string
 	attributeGroup string
 	shape          []io.DataShape
 	cli            client.SlaitClient
@@ -68,6 +70,7 @@ func NewBgWorker(conf map[string]interface{}) (bgworker.BgWorker, error) {
 	return &SlaitSubscriber{
 		config:         conf,
 		endpoint:       config.Endpoint,
+		timeframe:      config.Timeframe,
 		topic:          config.Topic,
 		attributeGroup: config.AttributeGroup,
 		shape:          io.NewDataShapeVector(names, types),
@@ -205,7 +208,7 @@ func (ss *SlaitSubscriber) publicationToCSM(p cache.Publication) (io.ColumnSerie
 		cs.AddColumn(names[i], col)
 	}
 	csm := io.NewColumnSeriesMap()
-	tbk := io.NewTimeBucketKey(fmt.Sprintf("%v/1Min/%v", p.Partition, ss.attributeGroup))
+	tbk := io.NewTimeBucketKey(fmt.Sprintf("%v/%v/%v", p.Partition, ss.timeframe, ss.attributeGroup))
 	csm.AddColumnSeries(*tbk, cs)
 	return csm, nil
 }
